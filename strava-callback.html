@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Connexion Strava · Suivi Sportif A/B</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header"><div><p class="eyebrow">Strava</p><h1>Connexion Strava</h1></div></header>
+<main>
+  <section class="card">
+    <p id="status" class="muted">Chargement…</p>
+    <div class="footer-actions">
+      <button class="primary" id="connectBtn" type="button" style="display:none">Connecter Strava</button>
+      <button class="ghost" id="syncBtn" type="button" style="display:none">Synchroniser mes activités</button>
+      <a class="ghost" href="index.html" style="text-decoration:none;padding:12px 18px;border-radius:999px;border:1px solid var(--line)">Retour à l'app</a>
+    </div>
+    <p id="result" class="muted"></p>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+  // ====== À COMPLÉTER : ton Client ID Strava (PAS le secret) ======
+  const STRAVA_CLIENT_ID = "189832";
+  // ================================================================
+  const REDIRECT_URI = location.origin + location.pathname; // cette page elle-même
+  const FUNCTIONS_BASE = SUPABASE_URL + "/functions/v1";
+
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (t) => { $("status").textContent = t; };
+
+  async function session() {
+    const { data } = await window.supabaseClient.auth.getSession();
+    return data.session;
+  }
+
+  function authorizeUrl() {
+    const p = new URLSearchParams({
+      client_id: STRAVA_CLIENT_ID,
+      response_type: "code",
+      redirect_uri: REDIRECT_URI,
+      approval_prompt: "auto",
+      scope: "activity:read_all",
+    });
+    return "https://www.strava.com/oauth/authorize?" + p.toString();
+  }
+
+  async function callFn(name, body) {
+    const s = await session();
+    const res = await fetch(FUNCTIONS_BASE + "/" + name, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + s.access_token },
+      body: JSON.stringify(body || {}),
+    });
+    return res.json();
+  }
+
+  (async function init() {
+    const s = await session();
+    if (!s) { setStatus("Connecte-toi d'abord à l'app (onglet Réglages), puis reviens sur cette page."); return; }
+
+    const params = new URLSearchParams(location.search);
+    if (params.get("error")) { setStatus("Autorisation refusée : " + params.get("error")); return; }
+
+    const code = params.get("code");
+    if (code) {
+      setStatus("Connexion à Strava en cours…");
+      const r = await callFn("strava-exchange", { code });
+      if (r.ok) {
+        setStatus("✅ Strava connecté ! Tu peux synchroniser tes activités.");
+        $("syncBtn").style.display = "";
+      } else {
+        setStatus("❌ Échec de la connexion : " + (r.error || JSON.stringify(r)));
+      }
+      return;
+    }
+
+    // pas de code : proposer la connexion
+    setStatus("Clique pour autoriser l'accès à tes activités Strava.");
+    $("connectBtn").style.display = "";
+    $("syncBtn").style.display = "";
+  })();
+
+  document.getElementById("connectBtn").onclick = () => {
+    if (STRAVA_CLIENT_ID === "189832") { alert("Renseigne d'abord ton Client ID Strava dans ce fichier."); return; }
+    location.href = authorizeUrl();
+  };
+  document.getElementById("syncBtn").onclick = async () => {
+    setStatus("Synchronisation…");
+    const r = await callFn("strava-sync", {});
+    $("result").textContent = JSON.stringify(r);
+    setStatus(r.connected ? `✅ ${r.imported} activité(s) importée(s).` : "Pas connecté à Strava : clique sur Connecter Strava.");
+  };
+</script>
+</body>
+</html>
