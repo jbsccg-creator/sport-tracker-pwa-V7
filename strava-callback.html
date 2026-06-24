@@ -85,7 +85,6 @@
   })();
 
   document.getElementById("connectBtn").onclick = () => {
-    if (STRAVA_CLIENT_ID === "189832") { alert("Renseigne d'abord ton Client ID Strava dans ce fichier."); return; }
     location.href = authorizeUrl();
   };
   document.getElementById("syncBtn").onclick = async () => {
